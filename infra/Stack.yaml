@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  PickANameTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: db-pick-a-name
+      AttributeDefinitions:
+        - AttributeName: teamName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: teamName
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+  LambdaDynamoDBRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: LambdaDynamoDBRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt PickANameTable.Arn
+  PickANameLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: PickANameLambdaFunction
+      Role: !GetAtt LambdaDynamoDBRole.Arn
+      Code:
+        S3Bucket: pick-a-name-lambda-bucket
+        S3Key: lambda.zip
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Timeout: 10
+  EventBridgeInvokeLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: EventBridgeInvokeLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: "354329269169"
+      Policies:
+        - PolicyName: EventBridgeInvokeLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PickANameLambdaFunction.Arn
+  PickANameEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: PickANameEventRule
+      ScheduleExpression: cron(0 22 ? * MON-FRI *)
+      # ScheduleExpression: "rate(5 minutes)"
+      RoleArn: !GetAtt EventBridgeInvokeLambdaRole.Arn
+      State: ENABLED
+      Description: Event rule to invoke PickANameLambdaFunction
+      Targets:
+        - Arn: !GetAtt PickANameLambdaFunction.Arn
+          Id: PickANameLambdaTarget
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref PickANameLambdaFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt PickANameEventRule.Arn
