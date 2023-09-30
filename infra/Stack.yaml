@@ -76,7 +76,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: PickANameEventRule
-      ScheduleExpression: cron(0 22 ? * MON-FRI *)
+      ScheduleExpression: cron(0 21 ? * SUN-THU *)
       # ScheduleExpression: "rate(5 minutes)"
       RoleArn: !GetAtt EventBridgeInvokeLambdaRole.Arn
       State: ENABLED
